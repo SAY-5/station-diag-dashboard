@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Station Diagnostics Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>Station Diagnostics</h1>
+    <div class="status">
+      <span id="conn-dot" class="dot dot-off"></span>
+      <span id="conn-text">connecting</span>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="panel feed-panel">
+      <div class="panel-head">
+        <h2>Live event feed</h2>
+        <span id="event-count" class="badge">0 events</span>
+      </div>
+      <ul id="feed" class="feed"></ul>
+    </section>
+
+    <section class="panel runs-panel">
+      <div class="panel-head">
+        <h2>Runs</h2>
+        <button id="refresh-runs" class="btn-small">Refresh</button>
+      </div>
+      <ul id="runs" class="runs"></ul>
+
+      <div id="run-detail" class="run-detail hidden">
+        <h3 id="run-detail-title">Run</h3>
+        <div id="run-detail-meta" class="meta"></div>
+
+        <h4>Flagged failures</h4>
+        <ul id="run-failures" class="failures"></ul>
+
+        <h4>Operator notes</h4>
+        <ul id="run-notes" class="notes"></ul>
+
+        <form id="note-form" class="note-form">
+          <input id="note-author" type="text" placeholder="operator" />
+          <textarea id="note-body" rows="2" placeholder="add a note for this run" required></textarea>
+          <div class="run-actions">
+            <button type="submit" class="btn">Add note</button>
+            <button type="button" id="resolve-btn" class="btn btn-ghost">Mark resolved</button>
+            <a id="export-link" class="btn btn-ghost" href="#">Export report</a>
+          </div>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+# Actuator failure signatures for the test-station diagnostics dashboard.
+# This rule set is illustrative. It models common actuator failure modes
+# seen on a hardware debugging bench, not any specific instrument protocol.
+#
+# Each rule has a kind that selects the detector:
+#   timeout      - a trigger event with no resolve event inside window
+#   threshold    - a numeric field crossing a bound
+#   consecutive  - N trigger events in a row with no resolve event between
+rules:
+  - id: actuator_timeout
+    kind: timeout
+    description: move_command issued with no position_reached within the window
+    subsystem: actuator
+    trigger_pattern: move_command
+    resolve_pattern: position_reached
+    within: 2s
+    severity: error
+
+  - id: actuator_overcurrent
+    kind: threshold
+    description: actuator drive current exceeds the safe operating bound
+    subsystem: actuator
+    level: warn
+    field: current_a
+    operator: gt
+    threshold: 3.5
+    severity: error
+
+  - id: actuator_stuck
+    kind: consecutive
+    description: three move_command events with no position_reached between them
+    subsystem: actuator
+    trigger_pattern: move_command
+    resolve_pattern: position_reached
+    count: 3
+    severity: error
