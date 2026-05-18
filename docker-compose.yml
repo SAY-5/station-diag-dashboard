@@ -1,0 +1,25 @@
+services:
+  dashboard:
+    build: .
+    image: station-diag-dashboard
+    command: ["-http", ":8080", "-tcp", ":7000", "-db", "/data/station-diag.db"]
+    ports:
+      - "8080:8080"
+    volumes:
+      - dashboard-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  station-emitter:
+    image: station-diag-dashboard
+    depends_on:
+      dashboard:
+        condition: service_healthy
+    entrypoint: ["/app/station-emitter"]
+    command: ["-target", "dashboard:7000", "-runs", "40", "-interval", "400ms"]
+
+volumes:
+  dashboard-data:
