@@ -1,7 +1,9 @@
 # Binaries
 /bin/
-dashboard
-station-emitter
+/dashboard
+/dashboard.exe
+/station-emitter
+/station-emitter.exe
 
 # SQLite databases
 *.db
