@@ -46,3 +46,31 @@ func TestBenchSmoke(t *testing.T) {
 		}
 	}
 }
+
+// TestRunRepeated checks the median-aggregating sweep used by cmd/bench and
+// the regression gate: it must record the repetition count, keep the line
+// count, and return a positive throughput for every K.
+func TestRunRepeated(t *testing.T) {
+	engine := loadBenchEngine(t)
+	corpus := benchcore.GenerateLines(400)
+	for _, k := range []int{1, 10} {
+		res := benchcore.RunRepeated(engine, corpus, k, 3)
+		if res.Reps != 3 {
+			t.Fatalf("K=%d: expected 3 reps, got %d", k, res.Reps)
+		}
+		if res.Lines != 400 {
+			t.Fatalf("K=%d: expected 400 lines, got %d", k, res.Lines)
+		}
+		if res.EventsPerSec <= 0 {
+			t.Fatalf("K=%d: non-positive throughput %.2f", k, res.EventsPerSec)
+		}
+		if res.RuleEvalP99US < res.RuleEvalP50US {
+			t.Fatalf("K=%d: P99 %.1f below P50 %.1f", k,
+				res.RuleEvalP99US, res.RuleEvalP50US)
+		}
+	}
+	// reps below 1 is clamped to a single run.
+	if got := benchcore.RunRepeated(engine, corpus, 1, 0); got.Reps != 1 {
+		t.Fatalf("reps=0 should clamp to 1, got %d", got.Reps)
+	}
+}
