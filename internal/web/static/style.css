@@ -285,6 +285,84 @@ body {
   color: var(--muted);
 }
 
+/* Run comparison: a full-width panel with two run pickers and a diff. */
+.compare-panel { grid-column: 1 / -1; }
+
+.compare-form {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.compare-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.compare-form select {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-family: ui-monospace, monospace;
+  font-size: 12.5px;
+  min-width: 180px;
+}
+
+.compare-summary {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.compare-result h4 {
+  font-size: 13px;
+  margin: 10px 0 4px;
+  color: var(--muted);
+}
+
+.compare-failures {
+  list-style: none;
+}
+
+.compare-failures li {
+  padding: 6px 8px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  font-size: 12.5px;
+  background: var(--panel-2);
+  border-left: 3px solid var(--muted);
+}
+
+.compare-failures li.cf-fail {
+  background: var(--fail-bg);
+  border-left-color: var(--fail);
+}
+
+.compare-failures li.cf-ok {
+  background: #1d3a26;
+  border-left-color: var(--ok);
+}
+
+.compare-failures li .rule { font-weight: 600; }
+.cf-meta { color: var(--muted); font-family: ui-monospace, monospace; }
+
+.delta-list {
+  list-style: none;
+  font-size: 12.5px;
+}
+
+.delta-list li {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
 @media (max-width: 860px) {
   .grid { grid-template-columns: 1fr; }
   .feed, .runs { max-height: 40vh; }

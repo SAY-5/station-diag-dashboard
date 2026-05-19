@@ -65,6 +65,27 @@
       </p>
       <ul id="incidents" class="incidents"></ul>
     </section>
+
+    <section class="panel compare-panel">
+      <div class="panel-head">
+        <h2>Run comparison</h2>
+      </div>
+      <p class="timeline-hint">
+        Diff two runs: failures new in run B are regressions, failures only
+        in run A were resolved. Pick a baseline and a compared run.
+      </p>
+      <form id="compare-form" class="compare-form">
+        <label>Run A (baseline)
+          <select id="compare-a"></select>
+        </label>
+        <label>Run B (compared)
+          <select id="compare-b"></select>
+        </label>
+        <button type="submit" class="btn">Compare</button>
+        <a id="compare-export" class="btn btn-ghost hidden" href="#">Export diff</a>
+      </form>
+      <div id="compare-result" class="compare-result"></div>
+    </section>
   </main>
 
   <script src="app.js"></script>

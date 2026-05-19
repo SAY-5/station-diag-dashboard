@@ -15,6 +15,7 @@ import (
 
 	"github.com/SAY-5/station-diag-dashboard/internal/correlate"
 	"github.com/SAY-5/station-diag-dashboard/internal/hub"
+	"github.com/SAY-5/station-diag-dashboard/internal/runcompare"
 	"github.com/SAY-5/station-diag-dashboard/internal/store"
 	"github.com/gorilla/websocket"
 )
@@ -87,7 +88,8 @@ func (s *Server) handleRuns(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleRunSubpath dispatches /api/runs/{id}, /api/runs/{id}/notes,
-// /api/runs/{id}/export and /api/runs/{id}/resolve.
+// /api/runs/{id}/export, /api/runs/{id}/resolve and
+// /api/runs/{a}/compare/{b}.
 func (s *Server) handleRunSubpath(w http.ResponseWriter, r *http.Request) {
 	rest := strings.TrimPrefix(r.URL.Path, "/api/runs/")
 	parts := strings.Split(strings.Trim(rest, "/"), "/")
@@ -106,6 +108,8 @@ func (s *Server) handleRunSubpath(w http.ResponseWriter, r *http.Request) {
 		s.handleExport(w, r, runID)
 	case len(parts) == 2 && parts[1] == "resolve":
 		s.handleResolve(w, r, runID)
+	case len(parts) == 3 && parts[1] == "compare" && parts[2] != "":
+		s.handleCompare(w, r, runID, parts[2])
 	default:
 		http.NotFound(w, r)
 	}
@@ -257,6 +261,64 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request, runID stri
 	w.Header().Set("Content-Disposition",
 		"attachment; filename=\"run-"+sanitizeFilename(runID)+".md\"")
 	_, _ = w.Write([]byte(md))
+}
+
+// handleCompare serves GET /api/runs/{a}/compare/{b}: a structured diff of
+// run B against run A. With ?format=md it returns the diff as a Markdown
+// report attachment instead of JSON.
+func (s *Server) handleCompare(w http.ResponseWriter, r *http.Request, runA, runB string) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	inA, err := s.loadRunInput(runA)
+	if errors.Is(err, store.ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	inB, err := s.loadRunInput(runB)
+	if errors.Is(err, store.ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	diff := runcompare.Compare(inA, inB)
+
+	if r.URL.Query().Get("format") == "md" {
+		md := renderComparison(diff)
+		w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+		w.Header().Set("Content-Disposition",
+			"attachment; filename=\"compare-"+sanitizeFilename(runA)+
+				"-vs-"+sanitizeFilename(runB)+".md\"")
+		_, _ = w.Write([]byte(md))
+		return
+	}
+	writeJSON(w, http.StatusOK, diff)
+}
+
+// loadRunInput gathers the run summary, failures and events the diff needs.
+func (s *Server) loadRunInput(runID string) (runcompare.RunInput, error) {
+	run, err := s.store.GetRun(runID)
+	if err != nil {
+		return runcompare.RunInput{}, err
+	}
+	failures, err := s.store.RunFailures(runID)
+	if err != nil {
+		return runcompare.RunInput{}, err
+	}
+	events, err := s.store.RunEvents(runID)
+	if err != nil {
+		return runcompare.RunInput{}, err
+	}
+	return runcompare.RunInput{Run: run, Failures: failures, Events: events}, nil
 }
 
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {

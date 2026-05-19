@@ -36,6 +36,7 @@ This is a portfolio project built to work through three things end to end:
 | `internal/hub`           | WebSocket fan-out hub with sequencing and backlog. |
 | `internal/store`         | SQLite persistence for runs, events, failures, notes. |
 | `internal/correlate`     | Groups failures into incidents with a root-cause ordering. |
+| `internal/runcompare`    | Diffs two runs: new, resolved and persisting failures. |
 | `internal/api`           | REST handlers, WebSocket endpoint, Markdown export. |
 | `internal/web`           | Embedded static dashboard frontend. |
 | `internal/benchcore`     | Shared ingest-to-fan-out throughput workload. |
@@ -53,6 +54,17 @@ at `GET /api/incidents`, pushed as an `incident` WebSocket message, and
 drawn on the dashboard as a grouped failure timeline. See
 [docs/correlation.md](docs/correlation.md) for the windowing and root-cause
 heuristic.
+
+## Run comparison
+
+Re-running a bench after a fix asks one question: did it work. The
+`runcompare` package diffs two stored runs and classifies every failure as
+new in run B (a regression), resolved since run A (a fix), or persisting in
+both. It also reports actuators whose failing status flipped and a
+per-subsystem failure-count and timing delta. The diff is served at
+`GET /api/runs/{a}/compare/{b}`, exported as Markdown with `?format=md`, and
+rendered side by side on the dashboard's run comparison panel. See
+[docs/run-comparison.md](docs/run-comparison.md) for the diff semantics.
 
 ## Throughput
 

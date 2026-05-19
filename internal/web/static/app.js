@@ -123,6 +123,7 @@ async function loadRuns() {
     const res = await fetch("/api/runs?limit=100");
     runs = await res.json();
   } catch (_) { return; }
+  refreshCompareOptions(Array.isArray(runs) ? runs : []);
   const list = el("runs");
   list.textContent = "";
   if (!runs || runs.length === 0) {
@@ -339,9 +340,124 @@ function windowMs(start, end) {
   return Math.max(0, Math.round(b - a));
 }
 
+// refreshCompareOptions keeps the two run pickers in sync with the run list.
+function refreshCompareOptions(runs) {
+  const a = el("compare-a"), b = el("compare-b");
+  const prevA = a.value, prevB = b.value;
+  a.textContent = "";
+  b.textContent = "";
+  for (const run of runs) {
+    a.appendChild(new Option(run.run_id, run.run_id));
+    b.appendChild(new Option(run.run_id, run.run_id));
+  }
+  if (prevA) a.value = prevA;
+  if (prevB) b.value = prevB;
+}
+
+// runComparison fetches the diff for the two selected runs and renders it.
+async function runComparison(evt) {
+  evt.preventDefault();
+  const runA = el("compare-a").value, runB = el("compare-b").value;
+  if (!runA || !runB) return;
+  const path = "/api/runs/" + encodeURIComponent(runA) +
+    "/compare/" + encodeURIComponent(runB);
+  let diff;
+  try {
+    const res = await fetch(path);
+    if (!res.ok) {
+      el("compare-result").textContent = "comparison failed";
+      return;
+    }
+    diff = await res.json();
+  } catch (_) {
+    el("compare-result").textContent = "comparison failed";
+    return;
+  }
+  renderComparison(diff);
+  const link = el("compare-export");
+  link.href = path + "?format=md";
+  link.classList.remove("hidden");
+}
+
+function renderComparison(diff) {
+  const root = el("compare-result");
+  root.textContent = "";
+
+  const summary = document.createElement("div");
+  summary.className = "compare-summary";
+  summary.append(
+    countTag("new", diff.new_failures, "tag-fail"),
+    countTag("resolved", diff.resolved_failures, "tag-ok"),
+    countTag("persisting", diff.persisting_failures, "tag"));
+  root.appendChild(summary);
+
+  root.appendChild(failureGroup("New failures in B", diff.new_failures,
+    "fail", "no regressions"));
+  root.appendChild(failureGroup("Resolved since A", diff.resolved_failures,
+    "ok", "nothing resolved"));
+  root.appendChild(failureGroup("Still failing in both",
+    diff.persisting_failures, "", "nothing persisted"));
+
+  if (diff.subsystem_deltas && diff.subsystem_deltas.length) {
+    const h = document.createElement("h4");
+    h.textContent = "Per-subsystem deltas";
+    root.appendChild(h);
+    const ul = document.createElement("ul");
+    ul.className = "delta-list";
+    for (const s of diff.subsystem_deltas) {
+      const li = document.createElement("li");
+      const sign = s.failure_delta > 0 ? "+" : "";
+      li.textContent = `${s.subsystem}: ${s.failures_a} to ${s.failures_b} ` +
+        `failures (${sign}${s.failure_delta}), span ` +
+        `${s.span_delta_ms >= 0 ? "+" : ""}${s.span_delta_ms} ms`;
+      ul.appendChild(li);
+    }
+    root.appendChild(ul);
+  }
+}
+
+function countTag(label, list, cls) {
+  const n = (list || []).length;
+  const t = document.createElement("span");
+  t.className = "tag " + cls;
+  t.textContent = n + " " + label;
+  return t;
+}
+
+function failureGroup(title, changes, cls, emptyText) {
+  const wrap = document.createElement("div");
+  const h = document.createElement("h4");
+  h.textContent = title;
+  wrap.appendChild(h);
+  if (!changes || changes.length === 0) {
+    const p = document.createElement("p");
+    p.className = "empty";
+    p.textContent = emptyText;
+    wrap.appendChild(p);
+    return wrap;
+  }
+  const ul = document.createElement("ul");
+  ul.className = "compare-failures";
+  for (const c of changes) {
+    const li = document.createElement("li");
+    if (cls) li.classList.add("cf-" + cls);
+    const r = document.createElement("span");
+    r.className = "rule";
+    r.textContent = c.rule_id + " ";
+    const meta = document.createElement("span");
+    meta.className = "cf-meta";
+    meta.textContent = `[${c.subsystem}${c.actuator_id ? "/" + c.actuator_id : ""}] `;
+    li.append(r, meta, document.createTextNode(c.detail || ""));
+    ul.appendChild(li);
+  }
+  wrap.appendChild(ul);
+  return wrap;
+}
+
 el("note-form").addEventListener("submit", submitNote);
 el("resolve-btn").addEventListener("click", toggleResolve);
 el("refresh-runs").addEventListener("click", loadRuns);
+el("compare-form").addEventListener("submit", runComparison);
 
 connect();
 loadRuns();
