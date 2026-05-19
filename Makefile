@@ -2,8 +2,9 @@ GO       ?= go
 BIN      ?= bin
 LDFLAGS  ?= -s -w
 COVERMIN ?= 88
+DRIFT    ?= 30
 
-.PHONY: build dev test lint run emit up clean e2e race cover
+.PHONY: build dev test lint run emit up clean e2e race cover bench bench-regress
 
 build:
 	$(GO) build -ldflags "$(LDFLAGS)" -o $(BIN)/dashboard ./cmd/dashboard
@@ -28,6 +29,16 @@ cover:
 	@total=$$($(GO) tool cover -func=coverage.out | awk '/^total:/ {gsub("%","",$$3); print $$3}'); \
 	echo "internal coverage: $$total% (gate $(COVERMIN)%)"; \
 	awk -v t=$$total -v m=$(COVERMIN) 'BEGIN { if (t+0 < m+0) { print "coverage below gate"; exit 1 } }'
+
+# bench runs the ingest-to-fan-out throughput sweep and writes a timestamped
+# JSON report under bench/results.
+bench:
+	$(GO) run ./cmd/bench
+
+# bench-regress compares the two most recent bench reports and fails if any
+# metric drifted past DRIFT percent. With one report it accepts the baseline.
+bench-regress:
+	DRIFT=$(DRIFT) scripts/bench-regress.sh
 
 lint:
 	golangci-lint run ./...

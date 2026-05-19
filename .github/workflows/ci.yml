@@ -72,6 +72,20 @@ jobs:
           RUN_E2E: '1'
         run: go test -count=1 -v ./tests/e2e/...
 
+  bench-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+      - name: Bench harness smoke test
+        run: go test -count=1 -run TestBenchSmoke ./tests/unit/...
+      - name: Generate a fresh bench report
+        run: go run ./cmd/bench -lines 20000 -reps 5
+      - name: Regression gate against committed baseline
+        run: make bench-regress
+
   build:
     runs-on: ubuntu-latest
     steps:

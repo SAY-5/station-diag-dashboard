@@ -35,6 +35,41 @@ This is a portfolio project built to work through three things end to end:
 | `internal/store`         | SQLite persistence for runs, events, failures, notes. |
 | `internal/api`           | REST handlers, WebSocket endpoint, Markdown export. |
 | `internal/web`           | Embedded static dashboard frontend. |
+| `internal/benchcore`     | Shared ingest-to-fan-out throughput workload. |
+| `cmd/bench`              | Standalone throughput sweep, writes a JSON report. |
+
+## Throughput
+
+`cmd/bench` feeds a deterministic corpus of log lines through the real hot
+path (ingest parse, sliding-window rule evaluation, hub fan-out) with K
+concurrent WebSocket subscribers attached and drained. Each K is run five
+times and the median is reported, because single short runs jitter heavily
+on shared hardware.
+
+A representative sweep (20,000 lines per repetition, Go 1.26, an 8-core
+laptop) measures sustained throughput and per-stage latency:
+
+| Subscribers | Throughput   | Rule eval P50/P95/P99 | Hub fan-out P50/P95/P99 |
+|-------------|--------------|-----------------------|-------------------------|
+| K = 1       | ~4,200 ev/s  | 170 / 385 / 875 us    | 0.1 / 0.5 / 1.4 us      |
+| K = 10      | ~4,400 ev/s  | 171 / 340 / 646 us    | 0.1 / 0.6 / 2.0 us      |
+| K = 50      | ~4,600 ev/s  | 172 / 305 / 516 us    | 0.1 / 0.5 / 7.8 us      |
+
+Throughput is bounded by rule evaluation over the sliding window, not by
+fan-out: hub fan-out stays sub-10us at the P99 even at fifty subscribers,
+so adding subscribers does not move the throughput figure. Absolute numbers
+depend on the host; the committed baseline under `bench/results/` is what
+the regression gate compares against.
+
+```sh
+make bench           # run the sweep, write bench/results/<timestamp>.json
+make bench-regress   # compare the two newest reports, fail past 30% drift
+```
+
+`make bench-regress` fails the build if throughput drops, or a P99 latency
+grows, more than 30 percent against the committed baseline. Sub-200us
+latency figures are below the noise floor and never trip the gate. The CI
+`bench-smoke` job runs the harness and the gate on every push.
 
 ## Quickstart
 
