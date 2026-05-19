@@ -1,8 +1,9 @@
-GO      ?= go
-BIN     ?= bin
-LDFLAGS ?= -s -w
+GO       ?= go
+BIN      ?= bin
+LDFLAGS  ?= -s -w
+COVERMIN ?= 88
 
-.PHONY: build dev test lint run emit up clean e2e
+.PHONY: build dev test lint run emit up clean e2e race cover
 
 build:
 	$(GO) build -ldflags "$(LDFLAGS)" -o $(BIN)/dashboard ./cmd/dashboard
@@ -16,6 +17,17 @@ test:
 
 e2e:
 	RUN_E2E=1 $(GO) test -count=1 ./tests/e2e/...
+
+race:
+	$(GO) test -race -count=1 ./...
+
+# cover runs the unit suite with cross-package coverage and fails the build
+# if statement coverage of ./internal/... drops below COVERMIN percent.
+cover:
+	$(GO) test -count=1 -coverpkg=./internal/... -coverprofile=coverage.out ./tests/unit/...
+	@total=$$($(GO) tool cover -func=coverage.out | awk '/^total:/ {gsub("%","",$$3); print $$3}'); \
+	echo "internal coverage: $$total% (gate $(COVERMIN)%)"; \
+	awk -v t=$$total -v m=$(COVERMIN) 'BEGIN { if (t+0 < m+0) { print "coverage below gate"; exit 1 } }'
 
 lint:
 	golangci-lint run ./...

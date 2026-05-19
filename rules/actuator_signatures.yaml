@@ -34,3 +34,51 @@ rules:
     resolve_pattern: position_reached
     count: 3
     severity: error
+
+  - id: actuator_undercurrent
+    kind: threshold
+    description: actuator drive current below the stall-detection floor
+    subsystem: actuator
+    level: warn
+    field: current_a
+    operator: lt
+    threshold: 0.2
+    severity: warn
+
+  - id: actuator_overtemp
+    kind: threshold
+    description: actuator winding temperature exceeds the thermal limit
+    subsystem: actuator
+    level: warn
+    field: temp_c
+    operator: gt
+    threshold: 85.0
+    severity: error
+
+  - id: encoder_dropout
+    kind: timeout
+    description: encoder_lost with no encoder_locked recovery inside the window
+    subsystem: actuator
+    trigger_pattern: encoder_lost
+    resolve_pattern: encoder_locked
+    within: 1s
+    severity: error
+
+  - id: home_retry_storm
+    kind: consecutive
+    description: four homing_failed events with no homing_ok between them
+    subsystem: actuator
+    trigger_pattern: homing_failed
+    resolve_pattern: homing_ok
+    count: 4
+    severity: warn
+
+  - id: power_supply_sag
+    kind: threshold
+    description: rail voltage drops below the brownout threshold
+    subsystem: power
+    level: warn
+    field: rail_v
+    operator: lt
+    threshold: 22.0
+    severity: error
