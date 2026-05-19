@@ -5,10 +5,12 @@ package store
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
+	"github.com/SAY-5/station-diag-dashboard/internal/correlate"
 	"github.com/SAY-5/station-diag-dashboard/internal/ingest"
 	"github.com/SAY-5/station-diag-dashboard/internal/rules"
 
@@ -80,6 +82,16 @@ CREATE TABLE IF NOT EXISTS notes (
 	created_at  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_notes_run ON notes(run_id);
+CREATE TABLE IF NOT EXISTS incidents (
+	id          TEXT PRIMARY KEY,
+	run_id      TEXT NOT NULL,
+	station_id  TEXT NOT NULL,
+	started_at  TEXT NOT NULL,
+	ended_at    TEXT NOT NULL,
+	root_cause  TEXT NOT NULL,
+	members     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_incidents_run ON incidents(run_id);
 `
 
 // Open opens (and migrates) the SQLite database at path. Use ":memory:"
@@ -324,6 +336,93 @@ func (s *Store) RunNotes(runID string) ([]Note, error) {
 		}
 		n.CreatedAt, _ = time.Parse(tsLayout, created)
 		out = append(out, n)
+	}
+	return out, rows.Err()
+}
+
+// SaveIncident upserts a correlated incident. The correlator extends an
+// incident as more failures arrive, so the same id is written repeatedly;
+// the latest member set replaces the previous one.
+func (s *Store) SaveIncident(in correlate.Incident) error {
+	if in.ID == "" {
+		return errors.New("store: incident has no id")
+	}
+	members, err := json.Marshal(in.Members)
+	if err != nil {
+		return fmt.Errorf("store: marshal incident members: %w", err)
+	}
+	_, err = s.db.Exec(`
+		INSERT INTO incidents (id, run_id, station_id, started_at, ended_at, root_cause, members)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			ended_at   = excluded.ended_at,
+			root_cause = excluded.root_cause,
+			members    = excluded.members`,
+		in.ID, in.RunID, in.StationID,
+		in.StartedAt.Format(tsLayout), in.EndedAt.Format(tsLayout),
+		in.RootCause, string(members))
+	if err != nil {
+		return fmt.Errorf("store: save incident: %w", err)
+	}
+	return nil
+}
+
+// ListIncidents returns correlated incidents, most recent first.
+func (s *Store) ListIncidents(limit int) ([]correlate.Incident, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := s.db.Query(`
+		SELECT id, run_id, station_id, started_at, ended_at, root_cause, members
+		FROM incidents ORDER BY started_at DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("store: list incidents: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []correlate.Incident
+	for rows.Next() {
+		var in correlate.Incident
+		var started, ended, members string
+		if err := rows.Scan(&in.ID, &in.RunID, &in.StationID,
+			&started, &ended, &in.RootCause, &members); err != nil {
+			return nil, err
+		}
+		in.StartedAt, _ = time.Parse(tsLayout, started)
+		in.EndedAt, _ = time.Parse(tsLayout, ended)
+		if err := json.Unmarshal([]byte(members), &in.Members); err != nil {
+			return nil, fmt.Errorf("store: decode incident members: %w", err)
+		}
+		out = append(out, in)
+	}
+	return out, rows.Err()
+}
+
+// RunIncidents returns the correlated incidents for a single run, oldest
+// first, so the run detail view can show its incident timeline.
+func (s *Store) RunIncidents(runID string) ([]correlate.Incident, error) {
+	rows, err := s.db.Query(`
+		SELECT id, run_id, station_id, started_at, ended_at, root_cause, members
+		FROM incidents WHERE run_id = ? ORDER BY started_at ASC`, runID)
+	if err != nil {
+		return nil, fmt.Errorf("store: run incidents: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []correlate.Incident
+	for rows.Next() {
+		var in correlate.Incident
+		var started, ended, members string
+		if err := rows.Scan(&in.ID, &in.RunID, &in.StationID,
+			&started, &ended, &in.RootCause, &members); err != nil {
+			return nil, err
+		}
+		in.StartedAt, _ = time.Parse(tsLayout, started)
+		in.EndedAt, _ = time.Parse(tsLayout, ended)
+		if err := json.Unmarshal([]byte(members), &in.Members); err != nil {
+			return nil, fmt.Errorf("store: decode incident members: %w", err)
+		}
+		out = append(out, in)
 	}
 	return out, rows.Err()
 }

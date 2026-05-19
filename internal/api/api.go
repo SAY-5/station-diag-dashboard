@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SAY-5/station-diag-dashboard/internal/correlate"
 	"github.com/SAY-5/station-diag-dashboard/internal/hub"
 	"github.com/SAY-5/station-diag-dashboard/internal/store"
 	"github.com/gorilla/websocket"
@@ -53,6 +54,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/health", s.handleHealth)
 	mux.HandleFunc("/api/runs", s.handleRuns)
 	mux.HandleFunc("/api/runs/", s.handleRunSubpath)
+	mux.HandleFunc("/api/incidents", s.handleIncidents)
 	mux.HandleFunc("/ws", s.handleWS)
 	mux.Handle("/", http.FileServer(http.FS(s.static)))
 	return mux
@@ -126,12 +128,38 @@ func (s *Server) handleRunGet(w http.ResponseWriter, r *http.Request, runID stri
 	events, _ := s.store.RunEvents(runID)
 	failures, _ := s.store.RunFailures(runID)
 	notes, _ := s.store.RunNotes(runID)
+	incidents, _ := s.store.RunIncidents(runID)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"run":      run,
-		"events":   events,
-		"failures": failures,
-		"notes":    notes,
+		"run":       run,
+		"events":    events,
+		"failures":  failures,
+		"notes":     notes,
+		"incidents": incidents,
 	})
+}
+
+// handleIncidents serves GET /api/incidents: the correlated failure groups
+// across all runs, most recent first, for the timeline view.
+func (s *Server) handleIncidents(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	limit := 100
+	if q := r.URL.Query().Get("limit"); q != "" {
+		if n, err := strconv.Atoi(q); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	incidents, err := s.store.ListIncidents(limit)
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	if incidents == nil {
+		incidents = []correlate.Incident{}
+	}
+	writeJSON(w, http.StatusOK, incidents)
 }
 
 type noteRequest struct {

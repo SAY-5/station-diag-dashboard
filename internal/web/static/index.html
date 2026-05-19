@@ -52,6 +52,19 @@
         </form>
       </div>
     </section>
+
+    <section class="panel timeline-panel">
+      <div class="panel-head">
+        <h2>Failure timeline</h2>
+        <span id="incident-count" class="badge">0 incidents</span>
+      </div>
+      <p class="timeline-hint">
+        Correlated incidents group failures that landed across subsystems
+        inside the correlation window. The leftmost subsystem band is the
+        probable root cause.
+      </p>
+      <ul id="incidents" class="incidents"></ul>
+    </section>
   </main>
 
   <script src="app.js"></script>

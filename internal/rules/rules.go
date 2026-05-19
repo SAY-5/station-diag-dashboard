@@ -53,10 +53,24 @@ type Failure struct {
 	RuleID    string    `json:"rule_id"`
 	StationID string    `json:"station_id"`
 	RunID     string    `json:"run_id"`
+	Subsystem string    `json:"subsystem"`
 	Actuator  string    `json:"actuator_id"`
 	Detail    string    `json:"detail"`
 	Severity  string    `json:"severity"`
 	At        time.Time `json:"at"`
+}
+
+// SubsystemOrActuator returns the failure's subsystem, falling back to the
+// actuator id when the originating rule declared no subsystem. Correlation
+// groups by this value, so it must never be empty for a real failure.
+func (f Failure) SubsystemOrActuator() string {
+	if f.Subsystem != "" {
+		return f.Subsystem
+	}
+	if f.Actuator != "" {
+		return f.Actuator
+	}
+	return "unknown"
 }
 
 // Engine holds a validated set of rules.
@@ -252,6 +266,7 @@ func failure(r Rule, station, run, actuator, detail string, at time.Time) Failur
 		RuleID:    r.ID,
 		StationID: station,
 		RunID:     run,
+		Subsystem: r.Subsystem,
 		Actuator:  actuator,
 		Detail:    detail,
 		Severity:  sev,

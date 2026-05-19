@@ -4,6 +4,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -28,16 +29,21 @@ type Config struct {
 
 	// BacklogSize is how many recent events the hub retains for backfill.
 	BacklogSize int `yaml:"backlog_size"`
+
+	// CorrelationWindow groups failures landing within this span of one
+	// another, for the same run, into a single incident.
+	CorrelationWindow time.Duration `yaml:"correlation_window"`
 }
 
 // Defaults returns a Config populated with development-friendly values.
 func Defaults() Config {
 	return Config{
-		HTTPAddr:    ":8080",
-		TCPAddr:     ":7000",
-		RulesFile:   "rules/actuator_signatures.yaml",
-		DBPath:      "station-diag.db",
-		BacklogSize: 500,
+		HTTPAddr:          ":8080",
+		TCPAddr:           ":7000",
+		RulesFile:         "rules/actuator_signatures.yaml",
+		DBPath:            "station-diag.db",
+		BacklogSize:       500,
+		CorrelationWindow: 500 * time.Millisecond,
 	}
 }
 
@@ -77,6 +83,9 @@ func applyDefaults(c Config) Config {
 	}
 	if c.BacklogSize == 0 {
 		c.BacklogSize = d.BacklogSize
+	}
+	if c.CorrelationWindow <= 0 {
+		c.CorrelationWindow = d.CorrelationWindow
 	}
 	return c
 }

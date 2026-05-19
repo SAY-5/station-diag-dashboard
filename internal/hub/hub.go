@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"sync"
 
+	"github.com/SAY-5/station-diag-dashboard/internal/correlate"
 	"github.com/SAY-5/station-diag-dashboard/internal/ingest"
 	"github.com/SAY-5/station-diag-dashboard/internal/rules"
 )
@@ -22,6 +23,9 @@ const (
 	KindFailureHighlight MessageKind = "failure_highlight"
 	// KindNoteAdded carries an operator note attached to a run.
 	KindNoteAdded MessageKind = "note_added"
+	// KindIncident carries a correlated group of failures with a probable
+	// root-cause ordering.
+	KindIncident MessageKind = "incident"
 )
 
 // Note is the payload for a KindNoteAdded message.
@@ -36,11 +40,12 @@ type Note struct {
 
 // Message is a single hub message with a monotonic sequence number.
 type Message struct {
-	Seq     int64            `json:"seq"`
-	Kind    MessageKind      `json:"kind"`
-	Event   *ingest.LogEvent `json:"event,omitempty"`
-	Failure *rules.Failure   `json:"failure,omitempty"`
-	Note    *Note            `json:"note,omitempty"`
+	Seq      int64               `json:"seq"`
+	Kind     MessageKind         `json:"kind"`
+	Event    *ingest.LogEvent    `json:"event,omitempty"`
+	Failure  *rules.Failure      `json:"failure,omitempty"`
+	Note     *Note               `json:"note,omitempty"`
+	Incident *correlate.Incident `json:"incident,omitempty"`
 }
 
 // Subscriber receives a copy of every message published after it joins,
@@ -89,6 +94,13 @@ func (h *Hub) Publish(ev ingest.LogEvent) {
 // PublishFailure fans a detected failure out to all subscribers.
 func (h *Hub) PublishFailure(f rules.Failure) {
 	h.broadcast(Message{Kind: KindFailureHighlight, Failure: &f})
+}
+
+// PublishIncident fans a correlated incident out to all subscribers. The
+// pipeline calls this each time an incident is created or extended, so a
+// client always sees the latest grouping for an incident id.
+func (h *Hub) PublishIncident(in correlate.Incident) {
+	h.broadcast(Message{Kind: KindIncident, Incident: &in})
 }
 
 // PublishNote fans an operator note out to all subscribers.

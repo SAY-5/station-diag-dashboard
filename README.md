@@ -4,7 +4,9 @@ A diagnostics dashboard for a hardware test bench. Test stations emit
 newline-delimited JSON log lines; the service ingests them, persists each
 run, fans events out to browser dashboards over WebSocket, and runs a
 YAML-driven rule engine that flags actuator failure signatures as they
-happen. Operators can attach notes to a run and export a Markdown report.
+happen. Related failures across subsystems are correlated into incidents
+with a probable root cause. Operators can attach notes to a run and export
+a Markdown report.
 
 ## What this studies
 
@@ -33,10 +35,24 @@ This is a portfolio project built to work through three things end to end:
 | `internal/rules`         | YAML-driven actuator failure rule engine. |
 | `internal/hub`           | WebSocket fan-out hub with sequencing and backlog. |
 | `internal/store`         | SQLite persistence for runs, events, failures, notes. |
+| `internal/correlate`     | Groups failures into incidents with a root-cause ordering. |
 | `internal/api`           | REST handlers, WebSocket endpoint, Markdown export. |
 | `internal/web`           | Embedded static dashboard frontend. |
 | `internal/benchcore`     | Shared ingest-to-fan-out throughput workload. |
 | `cmd/bench`              | Standalone throughput sweep, writes a JSON report. |
+
+## Failure correlation
+
+A bench fault rarely shows up as one failure. An actuator overcurrent, the
+rail sag it causes, and a downstream encoder dropout are three rule-engine
+failures but one event. The `correlate` package groups failures that land
+within a configurable window of one another, for the same run, into a
+single **incident**, and orders the incident so the earliest-in-window
+subsystem (the probable root cause) is first. Incidents are persisted, served
+at `GET /api/incidents`, pushed as an `incident` WebSocket message, and
+drawn on the dashboard as a grouped failure timeline. See
+[docs/correlation.md](docs/correlation.md) for the windowing and root-cause
+heuristic.
 
 ## Throughput
 

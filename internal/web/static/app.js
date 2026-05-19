@@ -11,6 +11,9 @@ const state = {
   selectedRun: null,
   ws: null,
   reconnectDelay: 1000,
+  // incidents is keyed by incident id; the correlator re-sends a growing
+  // incident under the same id, so the latest message replaces the prior.
+  incidents: new Map(),
 };
 
 const el = (id) => document.getElementById(id);
@@ -59,6 +62,9 @@ function handleMessage(msg) {
     if (state.selectedRun === msg.note.run_id) {
       loadRunDetail(msg.note.run_id);
     }
+  } else if (msg.kind === "incident" && msg.incident) {
+    state.incidents.set(msg.incident.id, msg.incident);
+    renderIncidents();
   }
 }
 
@@ -247,10 +253,98 @@ async function toggleResolve() {
   loadRunDetail(state.selectedRun);
 }
 
+// loadIncidents backfills the timeline from the REST API on page load and
+// on the periodic refresh, so a freshly opened dashboard is not empty.
+async function loadIncidents() {
+  let incidents;
+  try {
+    const res = await fetch("/api/incidents?limit=100");
+    incidents = await res.json();
+  } catch (_) { return; }
+  if (!Array.isArray(incidents)) return;
+  for (const inc of incidents) state.incidents.set(inc.id, inc);
+  renderIncidents();
+}
+
+// renderIncidents draws each correlated incident as a horizontal band of
+// subsystem segments, earliest subsystem first. The first segment carries a
+// "root cause" marker.
+function renderIncidents() {
+  const list = el("incidents");
+  list.textContent = "";
+
+  const incidents = [...state.incidents.values()].sort((a, b) =>
+    (b.started_at || "").localeCompare(a.started_at || ""));
+
+  el("incident-count").textContent =
+    incidents.length + (incidents.length === 1 ? " incident" : " incidents");
+
+  if (incidents.length === 0) {
+    const li = document.createElement("li");
+    li.className = "empty";
+    li.textContent = "no correlated incidents yet";
+    list.appendChild(li);
+    return;
+  }
+
+  for (const inc of incidents) {
+    const li = document.createElement("li");
+    li.className = "incident";
+
+    const head = document.createElement("div");
+    head.className = "incident-head";
+    const id = document.createElement("span");
+    id.className = "incident-id";
+    id.textContent = inc.run_id;
+    const span = document.createElement("span");
+    span.className = "incident-span";
+    span.textContent =
+      windowMs(inc.started_at, inc.ended_at) + " ms span, " +
+      (inc.members || []).length + " failures";
+    head.append(id, span);
+    li.appendChild(head);
+
+    const band = document.createElement("div");
+    band.className = "incident-band";
+    const members = inc.members || [];
+    members.forEach((m, idx) => {
+      const seg = document.createElement("div");
+      seg.className = "band-seg sev-" + (m.severity || "error");
+      if (idx === 0) seg.classList.add("root-cause");
+      const sub = document.createElement("span");
+      sub.className = "seg-sub";
+      sub.textContent = m.subsystem || "?";
+      const rule = document.createElement("span");
+      rule.className = "seg-rule";
+      rule.textContent = m.rule_id || "";
+      seg.append(sub, rule);
+      seg.title = (m.rule_id || "") + ": " + (m.detail || "");
+      band.appendChild(seg);
+    });
+    li.appendChild(band);
+
+    const cause = document.createElement("div");
+    cause.className = "incident-cause";
+    cause.textContent = "probable root cause: " + (inc.root_cause || "unknown");
+    li.appendChild(cause);
+
+    list.appendChild(li);
+  }
+}
+
+// windowMs returns the millisecond span between two RFC3339 timestamps.
+function windowMs(start, end) {
+  const a = Date.parse(start), b = Date.parse(end);
+  if (isNaN(a) || isNaN(b)) return "?";
+  return Math.max(0, Math.round(b - a));
+}
+
 el("note-form").addEventListener("submit", submitNote);
 el("resolve-btn").addEventListener("click", toggleResolve);
 el("refresh-runs").addEventListener("click", loadRuns);
 
 connect();
 loadRuns();
+loadIncidents();
 setInterval(loadRuns, 8000);
+setInterval(loadIncidents, 8000);

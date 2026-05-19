@@ -75,7 +75,8 @@ func run(cfg config.Config, logger *slog.Logger) error {
 
 	// The diagnostic pipeline: every ingested event is persisted, fanned out
 	// to dashboards, and fed through the rule engine over a sliding window.
-	pipeline := newPipeline(st, h, engine, logger)
+	// Detected failures are correlated into incidents within the window.
+	pipeline := newPipeline(st, h, engine, cfg.CorrelationWindow, logger)
 
 	ctx, stop := signal.NotifyContext(context.Background(),
 		os.Interrupt, syscall.SIGTERM)
